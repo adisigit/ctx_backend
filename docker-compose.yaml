@@ -1,0 +1,42 @@
+services:
+  app:
+    container_name: ctx_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT}:${PORT}"
+    environment:
+      PORT: ${PORT}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_CONTAINER_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABSE: ${DB_DATABSE}
+      DB_SCHEMA: ${DB_SCHEMA}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    container_name: ctx_db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABSE}
+    ports:
+      - "${DB_PORT}:${DB_CONTAINER_PORT}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABSE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
