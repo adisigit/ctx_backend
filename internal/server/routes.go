@@ -22,6 +22,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}))
 	api := humagin.New(r, buildHumaConfig())
 	router.RegisterGeneralRoutes(api, handler.NewGeneralHandler(s.db))
+	router.RegisterAuthRoutes(api, r, handler.NewAuthHandler(s.db.DB()))
 	return r
 }
 

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"ctx_backend/internal/auth"
+	"ctx_backend/internal/auth/providers"
 	"ctx_backend/internal/database"
 	"fmt"
 	"net/http"
@@ -17,6 +19,7 @@ type Server struct {
 
 func NewServer() *http.Server {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
+	auth.RegisterProvider("google", &providers.GoogleProvider{})
 	NewServer := &Server{
 		port: port,
 		db:   database.New(),
