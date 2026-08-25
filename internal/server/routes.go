@@ -1,6 +1,7 @@
 package server
 
 import (
+	"ctx_backend/internal/auth"
 	"ctx_backend/internal/server/handler"
 	"ctx_backend/internal/server/router"
 	"net/http"
@@ -21,8 +22,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 		AllowCredentials: true,
 	}))
 	api := humagin.New(r, buildHumaConfig())
+	cliTokenService := auth.NewCLITokenService(s.db.DB())
+	cliSessionService := auth.NewCLISessionService()
 	router.RegisterGeneralRoutes(api, handler.NewGeneralHandler(s.db))
-	router.RegisterAuthRoutes(api, r, handler.NewAuthHandler(s.db.DB()))
+	router.RegisterAuthRoutes(api, r, handler.NewAuthHandler(s.db.DB(), cliTokenService, cliSessionService))
 	return r
 }
 
