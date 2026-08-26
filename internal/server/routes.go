@@ -24,8 +24,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 	api := humagin.New(r, buildHumaConfig())
 	cliTokenService := auth.NewCLITokenService(s.db.DB())
 	cliSessionService := auth.NewCLISessionService()
+	jwtService := auth.NewJWTService()
 	router.RegisterGeneralRoutes(api, handler.NewGeneralHandler(s.db))
-	router.RegisterAuthRoutes(api, r, handler.NewAuthHandler(s.db.DB(), cliTokenService, cliSessionService))
+	router.RegisterAuthRoutes(r, handler.NewAuthHandler(s.db.DB(), cliTokenService, cliSessionService, jwtService))
 	return r
 }
 

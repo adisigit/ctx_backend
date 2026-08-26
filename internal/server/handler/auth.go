@@ -15,14 +15,16 @@ type AuthHandler struct {
 	db                *gorm.DB
 	cliTokenService   *auth.CLITokenService
 	cliSessionService *auth.CLISessionService
+	jwtService        *auth.JWTService
 	frontendURL       string
 }
 
-func NewAuthHandler(db *gorm.DB, cliTokenService *auth.CLITokenService, cliSessionService *auth.CLISessionService) *AuthHandler {
+func NewAuthHandler(db *gorm.DB, cliTokenService *auth.CLITokenService, cliSessionService *auth.CLISessionService, jwtService *auth.JWTService) *AuthHandler {
 	return &AuthHandler{
 		db:                db,
 		cliTokenService:   cliTokenService,
 		cliSessionService: cliSessionService,
+		jwtService:        jwtService,
 		frontendURL:       os.Getenv("FRONTEND_URL"),
 	}
 }
@@ -41,7 +43,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	csrf := auth.GenerateRandomString(32)
-	c.SetCookie("csrf", csrf, 300, "/", "", false, true)
+	c.SetCookie("csrf", csrf, 300, "/", "", isProduction(), true)
 
 	state, err := auth.EncodeState(auth.OAuthState{Client: client, SessionID: sessionID, CSRF: csrf})
 	if err != nil {
@@ -52,8 +54,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	c.SetCookie("access_token", "", -1, "/", "", false, true)
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	c.SetCookie("access_token", "", -1, "/", "", isProduction(), true)
+	c.SetCookie("refresh_token", "", -1, "/", "", isProduction(), true)
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
@@ -75,7 +77,7 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?status=error")
 		return
 	}
-	c.SetCookie("csrf", "", -1, "/", "", false, true)
+	c.SetCookie("csrf", "", -1, "/", "", isProduction(), true)
 	code := c.Query("code")
 	if code == "" {
 		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?status=error")
@@ -104,7 +106,7 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 	case "cli":
 		h.handleCLICallback(c, user, state.SessionID)
 	default:
-		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=web&status=success")
+		h.handleWebCallback(c, user)
 	}
 }
 
@@ -119,6 +121,23 @@ func (h *AuthHandler) handleCLICallback(c *gin.Context, user models.User, sessio
 		return
 	}
 	c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=cli&status=success")
+}
+
+func (h *AuthHandler) handleWebCallback(c *gin.Context, user models.User) {
+	accessToken, err := h.jwtService.GenerateAccessToken(user.ID, user.Email, user.Name)
+	if err != nil {
+		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=web&status=error")
+		return
+	}
+	refreshToken, err := h.jwtService.GenerateRefreshToken(user.ID, user.Email, user.Name)
+	if err != nil {
+		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=web&status=error")
+		return
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("access_token", accessToken, 15*60, "/", "", isProduction(), true)
+	c.SetCookie("refresh_token", refreshToken, 7*24*60*60, "/", "", isProduction(), true)
+	c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=web&status=success")
 }
 
 func (h *AuthHandler) CreateCLISession(c *gin.Context) {
@@ -150,4 +169,33 @@ func (h *AuthHandler) PollCLISession(c *gin.Context) {
 		"status":          string(sess.Status),
 		"encrypted_token": sess.EncryptedToken,
 	})
+}
+
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	refreshCookie, err := c.Cookie("refresh_token")
+	if err != nil || refreshCookie == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh token not found"})
+		return
+	}
+	userId, err := h.jwtService.Verify(refreshCookie)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+	var user models.User
+	if err := h.db.First(&user, userId).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	newAccessToken, err := h.jwtService.GenerateAccessToken(userId, user.Name, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.SetCookie("access_token", newAccessToken, 15*60, "/", "", isProduction(), true)
+	c.JSON(http.StatusOK, gin.H{"status": "refreshed"})
+}
+
+func isProduction() bool {
+	return os.Getenv("MODE") == "production"
 }
