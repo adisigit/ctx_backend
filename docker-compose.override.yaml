@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     volumes:
-      - .:/app
+      - .:/app:Z
       - /app/tmp
     environment:
       GIN_MODE: debug
