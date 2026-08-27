@@ -27,6 +27,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	jwtService := auth.NewJWTService()
 	router.RegisterGeneralRoutes(api, handler.NewGeneralHandler(s.db))
 	router.RegisterAuthRoutes(r, handler.NewAuthHandler(s.db.DB(), cliTokenService, cliSessionService, jwtService))
+	router.RegisterProtectedGroup(api, jwtService, cliTokenService)
 	return r
 }
 
