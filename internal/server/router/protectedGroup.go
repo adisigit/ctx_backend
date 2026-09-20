@@ -9,6 +9,6 @@ import (
 
 func RegisterProtectedGroup(api huma.API, jwtService *auth.JWTService, cliTokenService *auth.CLITokenService) {
 	group := huma.NewGroup(api, "/api")
-	group.UseMiddleware(middleware.RequireAuth(jwtService, cliTokenService))
-	registerCLIVerify(group)
+	group.UseMiddleware(middleware.RequireAuth(group, jwtService, cliTokenService))
+	registerCLIVerify(group, cliTokenService)
 }
