@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS cli_token;
+DROP TABLE IF EXISTS cli_tokens;

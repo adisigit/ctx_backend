@@ -111,7 +111,8 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 }
 
 func (h *AuthHandler) handleCLICallback(c *gin.Context, user models.User, sessionID string) {
-	accessToken, err := h.cliTokenService.Generate(user)
+	deviceName := h.cliSessionService.GetDeviceName(sessionID)
+	accessToken, err := h.cliTokenService.Generate(user, deviceName)
 	if err != nil {
 		c.Redirect(http.StatusTemporaryRedirect, h.frontendURL+"/login/complete?client=cli&status=error")
 		return
@@ -142,13 +143,14 @@ func (h *AuthHandler) handleWebCallback(c *gin.Context, user models.User) {
 
 func (h *AuthHandler) CreateCLISession(c *gin.Context) {
 	var req struct {
-		PublicKey string `json:"public_key" binding:"required"`
+		PublicKey  string `json:"public_key" binding:"required"`
+		DeviceName string `json:"device_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	sessionID := h.cliSessionService.Create(req.PublicKey)
+	sessionID := h.cliSessionService.Create(req.PublicKey, req.DeviceName)
 	c.JSON(http.StatusOK, gin.H{
 		"session_id": sessionID,
 		"login_url":  h.frontendURL + "/login?client=cli&session_id=" + sessionID,

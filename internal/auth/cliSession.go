@@ -15,6 +15,7 @@ const (
 
 type CLISession struct {
 	PublicKeyB64   string
+	DeviceName     string
 	Status         CLISessionStatus
 	EncryptedToken string
 	ExpiresAt      time.Time
@@ -31,12 +32,13 @@ func NewCLISessionService() *CLISessionService {
 	return s
 }
 
-func (s *CLISessionService) Create(publicKeyB64 string) string {
+func (s *CLISessionService) Create(publicKeyB64, deviceName string) string {
 	sessionID := GenerateRandomString(16)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions[sessionID] = &CLISession{
 		PublicKeyB64: publicKeyB64,
+		DeviceName:   deviceName,
 		Status:       CLISessionPending,
 		ExpiresAt:    time.Now().Add(10 * time.Minute),
 	}
@@ -70,6 +72,16 @@ func (s *CLISessionService) Poll(sessionID string) (*CLISession, error) {
 		delete(s.sessions, sessionID)
 	}
 	return sess, nil
+}
+
+func (s *CLISessionService) GetDeviceName(sessionID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionID]
+	if !ok || time.Now().After(sess.ExpiresAt) {
+		return ""
+	}
+	return sess.DeviceName
 }
 
 func (s *CLISessionService) cleanupLoop() {
